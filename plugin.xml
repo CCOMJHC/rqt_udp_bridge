@@ -1,0 +1,12 @@
+<library path="lib/librqt_udp_bridge">
+    <class name="rqt_udp_bridge/UDPBridgePlugin" type="rqt_udp_bridge::UDPBridgePlugin" base_class_type="rqt_gui_cpp::Plugin">
+        <description>
+            An interface to view and control udp_bridge nodes.
+        </description>
+        <qtgui>
+            <label>UDP Bridge Plugin</label>
+            <icon type="theme">system-help</icon>
+            <statustip>View and control udp_bridge nodes.</statustip>
+        </qtgui>
+    </class>   
+</library>
