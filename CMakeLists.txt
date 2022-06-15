@@ -33,6 +33,7 @@ set(rqt_udp_bridge_HDRS
 
 set(rqt_udp_bridge_UIS
   src/udp_bridge_plugin.ui
+  src/add_remote_dialog.ui
 )
 
 set(rqt_udp_bridge_INCLUDE_DIRECTORIES
