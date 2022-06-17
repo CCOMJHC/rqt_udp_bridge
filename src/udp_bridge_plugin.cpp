@@ -38,15 +38,25 @@ void UDPBridgePlugin::initPlugin(qt_gui_cpp::PluginContext& context)
 
   connect(ui_.addRemotePushButton, SIGNAL(pressed()), this, SLOT(addRemote()));
 
-  connect(ui_.remotesListWidget, SIGNAL(itemSelectionChanged()), this, SLOT(selectedRemoteChanged()) );
+  connect(ui_.remotesTableWidget, SIGNAL(itemSelectionChanged()), this, SLOT(selectedRemoteChanged()) );
 
   connect(ui_.localTopicsTableWidget, SIGNAL(itemSelectionChanged()), this, SLOT(selectedLocalTopicChanged()));
 
   connect(ui_.advertisePushButton, SIGNAL(pressed()), this, SLOT(advertise()));
 
+  connect(this, SIGNAL(bridgeInfoUpdated()), this, SLOT(updateTables()));
+  connect(this, SIGNAL(channelStatisticsUpdated()), this, SLOT(updateStatistics()));
+
   QStringList local_topics_header;
   local_topics_header.append("topic");
+  local_topics_header.append("data rate");
   ui_.localTopicsTableWidget->setHorizontalHeaderLabels(local_topics_header);
+
+  QStringList remotes_header;
+  remotes_header.append("remote");
+  remotes_header.append("overhead");
+  remotes_header.append("total");
+  ui_.remotesTableWidget->setHorizontalHeaderLabels(remotes_header);
 
   // set node name if passed in as argument
   const QStringList& argv = context.argv();
@@ -60,6 +70,7 @@ void UDPBridgePlugin::shutdownPlugin()
 {
   channel_statistics_subscriber_.shutdown();
   bridge_info_subscriber_.shutdown();
+  remote_bridge_info_subsciber_.shutdown();
 }
 
 void UDPBridgePlugin::saveSettings(qt_gui_cpp::Settings& plugin_settings, qt_gui_cpp::Settings& instance_settings) const
@@ -145,38 +156,56 @@ void UDPBridgePlugin::selectNode(const QString& node)
 
 void UDPBridgePlugin::onNodeChanged(int index)
 {
+  active_remote_.clear();
+  active_local_topic_.clear();
   channel_statistics_subscriber_.shutdown();
-  channel_statistics_array_.channels.clear();
   bridge_info_subscriber_.shutdown();
-  bridge_info_ = udp_bridge::BridgeInfo();
+  remote_bridge_info_subsciber_.shutdown();
   service_clients_.clear();
   ui_.localTopicsTableWidget->clearContents();
   ui_.localTopicsTableWidget->setRowCount(0);
-    
+  ui_.remotesTableWidget->clearContents();
+  ui_.remotesTableWidget->setRowCount(0);
+  ui_.advertisePushButton->setEnabled(false);
+  ui_.remoteTopicsTableWidget->clearContents();
+  ui_.remoteTopicsTableWidget->setRowCount(0);
+  {
+    std::lock_guard<std::mutex> lock(data_update_mutex_);
+    channel_statistics_array_ = udp_bridge::ChannelStatisticsArray();
+    bridge_info_ = udp_bridge::BridgeInfo();
+    remote_bridge_info_ = udp_bridge::BridgeInfo();
+    remote_channel_statistics_array_ = udp_bridge::ChannelStatisticsArray();
+  }
+
+
   QString node = ui_.nodesComboBox->itemData(index).toString();
+  node_namespace_ = node.toStdString();
   if(!node.isEmpty())
   {
-    channel_statistics_subscriber_ = getNodeHandle().subscribe(node.toStdString()+"/channel_info", 1, &UDPBridgePlugin::channelStatisticsCallback, this);
-    bridge_info_subscriber_ = getNodeHandle().subscribe(node.toStdString()+"/bridge_info", 1, &UDPBridgePlugin::bridgeInfoCallback, this);
-    service_clients_["list_remotes"] = ros::service::createClient<udp_bridge::ListRemotes>(node.toStdString()+"/list_remotes");
-    service_clients_["add_remote"] = ros::service::createClient<udp_bridge::AddRemote>(node.toStdString()+"/add_remote");
-    service_clients_["remote_advertise"] = ros::service::createClient<udp_bridge::Subscribe>(node.toStdString()+"/remote_advertise");
-    service_clients_["remote_subscribe"] = ros::service::createClient<udp_bridge::Subscribe>(node.toStdString()+"/remote_subscribe");
+    channel_statistics_subscriber_ = getNodeHandle().subscribe(node_namespace_+"/channel_info", 1, &UDPBridgePlugin::channelStatisticsCallback, this);
+    bridge_info_subscriber_ = getNodeHandle().subscribe(node_namespace_+"/bridge_info", 1, &UDPBridgePlugin::bridgeInfoCallback, this);
+    service_clients_["list_remotes"] = ros::service::createClient<udp_bridge::ListRemotes>(node_namespace_+"/list_remotes");
+    service_clients_["add_remote"] = ros::service::createClient<udp_bridge::AddRemote>(node_namespace_+"/add_remote");
+    service_clients_["remote_advertise"] = ros::service::createClient<udp_bridge::Subscribe>(node_namespace_+"/remote_advertise");
+    service_clients_["remote_subscribe"] = ros::service::createClient<udp_bridge::Subscribe>(node_namespace_+"/remote_subscribe");
   }
-  updateRemotes();
 }
 
 void UDPBridgePlugin::channelStatisticsCallback(const udp_bridge::ChannelStatisticsArray& msg)
 {
-  channel_statistics_array_ = msg;
-  updateStatistics();
+  {
+    std::lock_guard<std::mutex> lock(data_update_mutex_);
+    channel_statistics_array_ = msg;
+  }
+  emit channelStatisticsUpdated();
 }
 
 std::string UDPBridgePlugin::selectedRemote()
 {
-  auto items = ui_.remotesListWidget->selectedItems();
-  if(!items.empty())
-    return items.front()->text().toStdString();
+  auto items = ui_.remotesTableWidget->selectedItems();
+  for(auto item: items)
+    if(item->column() == 0)
+      return item->text().toStdString();
   return std::string();
 }
 
@@ -185,7 +214,17 @@ std::string UDPBridgePlugin::selectedLocalTopic()
   auto items = ui_.localTopicsTableWidget->selectedItems();
   for(auto item: items)
   {
-    std::cerr << item->row() << ", " << item->column() << " " << item->text().toStdString() << std::endl;
+    if(item->column() == 0)
+      return item->text().toStdString();
+  }
+  return std::string();
+}
+
+std::string UDPBridgePlugin::selectedRemoteTopic()
+{
+  auto items = ui_.remoteTopicsTableWidget->selectedItems();
+  for(auto item: items)
+  {
     if(item->column() == 0)
       return item->text().toStdString();
   }
@@ -194,24 +233,239 @@ std::string UDPBridgePlugin::selectedLocalTopic()
 
 void UDPBridgePlugin::updateStatistics()
 {
-  std::string selected_remote = selectedRemote();
-  for(auto cs: channel_statistics_array_.channels)
-    std::cerr << " " << cs.source_topic << "\t" << cs.remote << "\t" << cs.compressed_bytes_per_second << " bytes/sec" << std::endl;
+  std::map<std::string, std::pair<double,double> > totals;
+  {
+    std::lock_guard<std::mutex> lock(data_update_mutex_);
+    for(auto cs: channel_statistics_array_.channels)
+    {
+      if(totals.find(cs.remote) == totals.end())
+        totals[cs.remote] = std::make_pair<double,double>(0.0,0.0);
+      totals[cs.remote].second += cs.compressed_bytes_per_second;
+      if(cs.source_topic.empty()) // overhead
+        totals[cs.remote].first += cs.compressed_bytes_per_second;
+    }
+  }
+  for(int row = 0; row < ui_.remotesTableWidget->rowCount(); row++)
+  {
+    auto item = ui_.remotesTableWidget->item(row, 0);
+    if(item)
+    {
+      auto overhead_item = ui_.remotesTableWidget->item(row, 1);
+      if(!overhead_item)
+      {
+        overhead_item = new QTableWidgetItem;
+        ui_.remotesTableWidget->setItem(row, 1, overhead_item);
+      }
+
+      auto total_item = ui_.remotesTableWidget->item(row, 2);
+      if(!total_item)
+      {
+        total_item = new QTableWidgetItem;
+        ui_.remotesTableWidget->setItem(row, 2, total_item);
+      }
+
+      if(totals.find(item->text().toStdString()) != totals.end())
+      {
+        overhead_item->setText(QString::number(totals[item->text().toStdString()].first)+" bytes/sec");
+        total_item->setText(QString::number(totals[item->text().toStdString()].second)+" bytes/sec");
+      }
+      else
+      {
+        overhead_item->setText("");
+        total_item->setText("");
+      }
+    }
+  }
+  ui_.remotesTableWidget->resizeColumnsToContents();
+
+  auto selected_remote = selectedRemote();
+  std::map<std::string, double> rates;
+  {
+    std::lock_guard<std::mutex> lock(data_update_mutex_);
+
+    for(auto cs: channel_statistics_array_.channels)
+    {
+      if(selected_remote.empty() || cs.remote == selected_remote)
+      {
+        if(rates.find(cs.source_topic) == rates.end())
+          rates[cs.source_topic] = 0.0;
+        rates[cs.source_topic] += cs.compressed_bytes_per_second;
+      }
+    }
+  }
+
+  for(int row = 0; row < ui_.localTopicsTableWidget->rowCount(); row++)
+  {
+    auto item = ui_.localTopicsTableWidget->item(row, 0);
+    if(item)
+    {
+      auto rate_item = ui_.localTopicsTableWidget->item(row, 1);
+      if(!rate_item)
+      {
+        rate_item = new QTableWidgetItem;
+        ui_.localTopicsTableWidget->setItem(row, 1, rate_item);
+      }
+      if(rates.find(item->text().toStdString()) != rates.end())
+        rate_item->setText(QString::number(rates[item->text().toStdString()])+" bytes/sec");
+      else
+        rate_item->setText("");
+    }
+  }
+  ui_.localTopicsTableWidget->resizeColumnsToContents();
+
+  std::map<std::string, double> remote_rates;
+  {
+    std::lock_guard<std::mutex> lock(data_update_mutex_);
+
+    for(auto cs: remote_channel_statistics_array_.channels)
+    {
+      if(remote_channel_statistics_array_.remote_label == cs.remote)
+      {
+        rates[cs.source_topic] = cs.compressed_bytes_per_second;
+      }
+    }
+  }
+
+  for(int row = 0; row < ui_.remoteTopicsTableWidget->rowCount(); row++)
+  {
+    auto item = ui_.remoteTopicsTableWidget->item(row, 0);
+    if(item)
+    {
+      auto rate_item = ui_.remoteTopicsTableWidget->item(row, 1);
+      if(!rate_item)
+      {
+        rate_item = new QTableWidgetItem;
+        ui_.remoteTopicsTableWidget->setItem(row, 1, rate_item);
+      }
+      if(remote_rates.find(item->text().toStdString()) != remote_rates.end())
+        rate_item->setText(QString::number(remote_rates[item->text().toStdString()])+" bytes/sec");
+      else
+        rate_item->setText("");
+    }
+  }
+  ui_.remoteTopicsTableWidget->resizeColumnsToContents();
 
 }
 
 void UDPBridgePlugin::bridgeInfoCallback(const udp_bridge::BridgeInfo& msg)
 {
-  for(auto t: msg.topics)
   {
-    auto items = ui_.localTopicsTableWidget->findItems(t.topic.c_str(),Qt::MatchExactly);
-    if(items.empty())
+    std::lock_guard<std::mutex> lock(data_update_mutex_);
+    bridge_info_ = msg;
+  }
+  emit bridgeInfoUpdated();
+}
+
+void UDPBridgePlugin::remoteBridgeInfoCallback(const udp_bridge::BridgeInfo& msg)
+{
+  {
+    std::lock_guard<std::mutex> lock(data_update_mutex_);
+    remote_bridge_info_ = msg;
+  }
+  emit bridgeInfoUpdated();
+}
+
+void UDPBridgePlugin::remoteChannelStatisticsCallback(const udp_bridge::ChannelStatisticsArray& msg)
+{
+  {
+    std::lock_guard<std::mutex> lock(data_update_mutex_);
+    remote_channel_statistics_array_ = msg;
+  }
+  emit bridgeInfoUpdated();
+}
+
+void UDPBridgePlugin::updateTables()
+{
+  updating_tables_ = true;
+  ui_.localTopicsTableWidget->clearContents();
+  ui_.localTopicsTableWidget->setRowCount(bridge_info_.topics.size());
+  ui_.localTopicsTableWidget->setSortingEnabled(false);
+  
+  for(int i = 0; i < bridge_info_.topics.size(); i++)
+  {
+    auto* item = new QTableWidgetItem(QString(bridge_info_.topics[i].topic.c_str()));
+    ui_.localTopicsTableWidget->setItem(i, 0, item);
+  }
+
+  ui_.localTopicsTableWidget->setSortingEnabled(true);
+  ui_.localTopicsTableWidget->sortByColumn(0, Qt::AscendingOrder);
+
+  bool local_topic_changed = false;
+  if(active_local_topic_.empty())
+    ui_.localTopicsTableWidget->clearSelection();
+  else
+  {
+    auto items = ui_.localTopicsTableWidget->findItems(active_local_topic_.c_str(), Qt::MatchExactly);
+    bool found = false;
+    for(auto item: items)
+      if(item->column() == 0)
+      {
+        ui_.localTopicsTableWidget->selectRow(item->row());
+        found = true;
+        break;
+      }
+    if(!found)
     {
-      ui_.localTopicsTableWidget->setRowCount(ui_.localTopicsTableWidget->rowCount()+1);
-      auto* i = new QTableWidgetItem(QString(t.topic.c_str()));
-      ui_.localTopicsTableWidget->setItem(ui_.localTopicsTableWidget->rowCount()-1, 0, i);
+      ui_.localTopicsTableWidget->clearSelection();
+      local_topic_changed = true;
     }
   }
+
+  ui_.remotesTableWidget->clearContents();
+  ui_.remotesTableWidget->setRowCount(bridge_info_.remotes.size());
+  ui_.remotesTableWidget->setSortingEnabled(false);
+
+  bool remote_changed = false;
+
+  for(int i = 0; i < bridge_info_.remotes.size(); i++)
+  {
+    auto* item = new QTableWidgetItem(QString(bridge_info_.remotes[i].name.c_str()));
+    ui_.remotesTableWidget->setItem(i, 0, item);
+  }
+
+  ui_.remotesTableWidget->setSortingEnabled(true);
+  ui_.remotesTableWidget->sortByColumn(0, Qt::AscendingOrder);
+
+  if(active_remote_.empty())
+    ui_.remotesTableWidget->clearSelection();
+  else
+  {
+    auto items = ui_.remotesTableWidget->findItems(active_remote_.c_str(), Qt::MatchExactly);
+    bool found = false;
+    for(auto item: items)
+      if(item->column() == 0)
+      {
+        ui_.remotesTableWidget->selectRow(item->row());
+        found = true;
+        break;
+      }
+    if(!found)
+    {
+      ui_.remotesTableWidget->clearSelection();
+      remote_changed = true;
+    }
+  }
+
+  ui_.remoteTopicsTableWidget->clearContents();
+  ui_.remoteTopicsTableWidget->setRowCount(remote_bridge_info_.topics.size());
+  ui_.remoteTopicsTableWidget->setSortingEnabled(false);
+
+  for(int i = 0; i < remote_bridge_info_.topics.size(); i++)
+  {
+    auto* item = new QTableWidgetItem(QString(remote_bridge_info_.topics[i].topic.c_str()));
+    ui_.remoteTopicsTableWidget->setItem(i, 0, item);
+  }
+
+  ui_.remoteTopicsTableWidget->setSortingEnabled(true);
+  ui_.remoteTopicsTableWidget->sortByColumn(0, Qt::AscendingOrder);
+
+
+  updating_tables_ = false;
+
+  if(remote_changed)
+    selectedRemoteChanged();
+  else if (local_topic_changed)
+    selectedLocalTopicChanged();
 }
 
 void UDPBridgePlugin::addRemote()
@@ -229,7 +483,6 @@ void UDPBridgePlugin::addRemote()
       add_remote.request.return_address = addRemoteDialogUI.returnAddressLineEdit->text().toStdString();
       add_remote.request.port = addRemoteDialogUI.portLineEdit->text().toInt();
       service_clients_["add_remote"].call(add_remote);
-      updateRemotes();
     }
   }
   else
@@ -254,51 +507,113 @@ void UDPBridgePlugin::advertise()
   }
 }
 
-void UDPBridgePlugin::updateRemotes()
-{
-  ui_.remotesListWidget->clear();
-  ui_.remotesListWidget->addItem("");
-  if(service_clients_.find("list_remotes") != service_clients_.end() && service_clients_["list_remotes"].exists())
-  {
-    udp_bridge::ListRemotes list_remotes;
-    if(service_clients_["list_remotes"].call(list_remotes))
-    {
-      for(auto remote: list_remotes.response.remotes)
-      {
-        ui_.remotesListWidget->addItem(remote.name.c_str());
-      }
-    }
-  }
-}
-
 void UDPBridgePlugin::selectedRemoteChanged()
 {
+  if(updating_tables_)
+    return;
+  auto selected = selectedRemote();
+  bool found = false;
+  for(auto remote: bridge_info_.remotes)
+  {
+    if(remote.name == selected)
+    {
+      ui_.remoteHostLineEdit->setText(remote.host.c_str());
+      ui_.remoteIPAddressLineEdit->setText(remote.ip_address.c_str());
+      ui_.remotePortLineEdit->setText(QString::number(remote.port));
+
+      std::string remote_info_topic = node_namespace_+"/remotes/"+remote.topic_label+"/bridge_info";
+      if(remote_bridge_info_subsciber_.getTopic() != remote_info_topic)
+      {
+        remote_bridge_info_subsciber_.shutdown();
+        remote_bridge_info_subsciber_ = getNodeHandle().subscribe(remote_info_topic, 1, &UDPBridgePlugin::remoteBridgeInfoCallback, this);
+      }
+      std::string remote_stats_topic = node_namespace_+"/remotes/"+remote.topic_label+"/channel_statistics";
+      if(remote_channel_statistics_subscriber_.getTopic() != remote_stats_topic)
+      {
+        remote_channel_statistics_subscriber_.shutdown();
+        remote_channel_statistics_subscriber_ = getNodeHandle().subscribe(remote_stats_topic, 1, &UDPBridgePlugin::remoteChannelStatisticsCallback, this);
+      }
+
+      found = true;
+      break;
+    }
+  }
+  if(!found)
+  {
+    ui_.remoteHostLineEdit->clear();
+    ui_.remoteIPAddressLineEdit->clear();
+    ui_.remotePortLineEdit->clear();
+    remote_bridge_info_subsciber_.shutdown();
+    remote_channel_statistics_subscriber_.shutdown();
+
+    std::lock_guard<std::mutex> lock(data_update_mutex_);
+    remote_bridge_info_ = udp_bridge::BridgeInfo();
+    remote_channel_statistics_array_ = udp_bridge::ChannelStatisticsArray();
+  }
+
   selectedLocalTopicChanged();
 }
 
 void UDPBridgePlugin::selectedLocalTopicChanged()
 {
+  if(updating_tables_)
+    return;
+
   updateStatistics();
 
   auto remote = selectedRemote();
   auto local_topic = selectedLocalTopic();
 
-  ui_.advertiseRemoteTopicLineEdit->clear();
-  ui_.advertisePeriodLineEdit->setText("0.0");
-  ui_.advertiseQueueSizeSpinBox->setValue(1);
-
-  for(auto t: bridge_info_.topics)
+  if(active_remote_ != remote || active_local_topic_ != local_topic)
   {
-    if(t.topic == local_topic)
-      for(auto r: t.remotes)
-        if(r.remote == remote)
-        {
-          ui_.advertiseRemoteTopicLineEdit->setText(r.destination_topic.c_str());
-          ui_.advertisePeriodLineEdit->setText(QString::number(r.period));
-        }
+    ui_.advertiseRemoteTopicLineEdit->clear();
+    ui_.advertisePeriodLineEdit->setText("0.0");
+    ui_.advertiseQueueSizeSpinBox->setValue(1);
+
+    bool subscribed = false;
+
+    for(auto t: bridge_info_.topics)
+    {
+      if(t.topic == local_topic)
+      {
+        for(auto r: t.remotes)
+          if(r.remote == remote)
+          {
+            ui_.advertiseRemoteTopicLineEdit->setText(r.destination_topic.c_str());
+            ui_.advertisePeriodLineEdit->setText(QString::number(r.period));
+            subscribed = true;
+            break;
+          }
+        break;
+      }
+    }
+    if(subscribed)
+      ui_.advertisePushButton->setText("Update");
+    else
+      ui_.advertisePushButton->setText("Advertise");
+    ui_.advertisePushButton->setEnabled(!remote.empty() && !local_topic.empty());
+
+    active_remote_ = remote;
+    active_local_topic_ = local_topic;
   }
-  ui_.advertisePushButton->setEnabled(!remote.empty() && !local_topic.empty());
 }
+
+void UDPBridgePlugin::selectedRemoteTopicChanged()
+{
+  if(updating_tables_)
+    return;
+
+  auto remote_topic = selectedRemoteTopic();
+  if(active_remote_topic_ != remote_topic)
+  {
+    ui_.subscribeLocalTopicLineEdit->clear();
+    ui_.subscribePeriodLineEdit->setText("0.0");
+    ui_.subscribeQueueSizeSpinBox->setValue(1);
+    
+  }
+  
+}
+
 
 } // namespace rqt_udp_bridge
 
