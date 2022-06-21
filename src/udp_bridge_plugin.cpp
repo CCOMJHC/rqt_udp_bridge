@@ -39,10 +39,11 @@ void UDPBridgePlugin::initPlugin(qt_gui_cpp::PluginContext& context)
   connect(ui_.addRemotePushButton, SIGNAL(pressed()), this, SLOT(addRemote()));
 
   connect(ui_.remotesTableWidget, SIGNAL(itemSelectionChanged()), this, SLOT(selectedRemoteChanged()) );
-
   connect(ui_.localTopicsTableWidget, SIGNAL(itemSelectionChanged()), this, SLOT(selectedLocalTopicChanged()));
+  connect(ui_.remoteTopicsTableWidget, SIGNAL(itemSelectionChanged()), this, SLOT(selectedRemoteTopicChanged()) );
 
   connect(ui_.advertisePushButton, SIGNAL(pressed()), this, SLOT(advertise()));
+  connect(ui_.subscribePushButton, SIGNAL(pressed()), this, SLOT(subscribe()));
 
   connect(this, SIGNAL(bridgeInfoUpdated()), this, SLOT(updateTables()));
   connect(this, SIGNAL(channelStatisticsUpdated()), this, SLOT(updateStatistics()));
@@ -58,6 +59,11 @@ void UDPBridgePlugin::initPlugin(qt_gui_cpp::PluginContext& context)
   remotes_header.append("total");
   ui_.remotesTableWidget->setHorizontalHeaderLabels(remotes_header);
 
+  QStringList remote_topics_header;
+  remote_topics_header.append("topic");
+  remote_topics_header.append("data rate");
+  ui_.remoteTopicsTableWidget->setHorizontalHeaderLabels(remote_topics_header);
+
   // set node name if passed in as argument
   const QStringList& argv = context.argv();
   if (!argv.empty()) {
@@ -71,6 +77,7 @@ void UDPBridgePlugin::shutdownPlugin()
   channel_statistics_subscriber_.shutdown();
   bridge_info_subscriber_.shutdown();
   remote_bridge_info_subsciber_.shutdown();
+  remote_channel_statistics_subscriber_.shutdown();
 }
 
 void UDPBridgePlugin::saveSettings(qt_gui_cpp::Settings& plugin_settings, qt_gui_cpp::Settings& instance_settings) const
@@ -158,9 +165,11 @@ void UDPBridgePlugin::onNodeChanged(int index)
 {
   active_remote_.clear();
   active_local_topic_.clear();
+  active_remote_topic_.clear();
   channel_statistics_subscriber_.shutdown();
   bridge_info_subscriber_.shutdown();
   remote_bridge_info_subsciber_.shutdown();
+  remote_channel_statistics_subscriber_.shutdown();
   service_clients_.clear();
   ui_.localTopicsTableWidget->clearContents();
   ui_.localTopicsTableWidget->setRowCount(0);
@@ -169,6 +178,7 @@ void UDPBridgePlugin::onNodeChanged(int index)
   ui_.advertisePushButton->setEnabled(false);
   ui_.remoteTopicsTableWidget->clearContents();
   ui_.remoteTopicsTableWidget->setRowCount(0);
+  ui_.subscribePushButton->setEnabled(false);
   {
     std::lock_guard<std::mutex> lock(data_update_mutex_);
     channel_statistics_array_ = udp_bridge::ChannelStatisticsArray();
@@ -245,6 +255,7 @@ void UDPBridgePlugin::updateStatistics()
         totals[cs.remote].first += cs.compressed_bytes_per_second;
     }
   }
+
   for(int row = 0; row < ui_.remotesTableWidget->rowCount(); row++)
   {
     auto item = ui_.remotesTableWidget->item(row, 0);
@@ -321,7 +332,7 @@ void UDPBridgePlugin::updateStatistics()
     {
       if(remote_channel_statistics_array_.remote_label == cs.remote)
       {
-        rates[cs.source_topic] = cs.compressed_bytes_per_second;
+        remote_rates[cs.source_topic] = cs.compressed_bytes_per_second;
       }
     }
   }
@@ -371,7 +382,7 @@ void UDPBridgePlugin::remoteChannelStatisticsCallback(const udp_bridge::ChannelS
     std::lock_guard<std::mutex> lock(data_update_mutex_);
     remote_channel_statistics_array_ = msg;
   }
-  emit bridgeInfoUpdated();
+  emit channelStatisticsUpdated();
 }
 
 void UDPBridgePlugin::updateTables()
@@ -459,6 +470,27 @@ void UDPBridgePlugin::updateTables()
   ui_.remoteTopicsTableWidget->setSortingEnabled(true);
   ui_.remoteTopicsTableWidget->sortByColumn(0, Qt::AscendingOrder);
 
+  bool remote_topic_changed = false;
+  if(active_remote_topic_.empty())
+    ui_.remoteTopicsTableWidget->clearSelection();
+  else
+  {
+    auto items = ui_.remoteTopicsTableWidget->findItems(active_remote_topic_.c_str(), Qt::MatchExactly);
+    bool found = false;
+    for(auto item: items)
+      if(item->column() == 0)
+      {
+        ui_.remoteTopicsTableWidget->selectRow(item->row());
+        found = true;
+        break;
+      }
+    if(!found)
+    {
+      ui_.remoteTopicsTableWidget->clearSelection();
+      remote_topic_changed = true;
+    }
+  }
+
 
   updating_tables_ = false;
 
@@ -466,6 +498,10 @@ void UDPBridgePlugin::updateTables()
     selectedRemoteChanged();
   else if (local_topic_changed)
     selectedLocalTopicChanged();
+  if(remote_topic_changed)
+    selectedRemoteTopicChanged();
+
+  updateStatistics();
 }
 
 void UDPBridgePlugin::addRemote()
@@ -504,6 +540,22 @@ void UDPBridgePlugin::advertise()
     s.request.period = ui_.advertisePeriodLineEdit->text().toDouble();
     s.request.queue_size = ui_.advertiseQueueSizeSpinBox->value();
     service_clients_["remote_advertise"].call(s);
+  }
+}
+
+void UDPBridgePlugin::subscribe()
+{
+  auto remote = selectedRemote();
+  auto remote_topic = selectedRemoteTopic();
+  if(!remote.empty() && !remote_topic.empty())
+  {
+    udp_bridge::Subscribe s;
+    s.request.remote = remote;
+    s.request.source_topic = remote_topic;
+    s.request.destination_topic = ui_.subscribeLocalTopicLineEdit->text().toStdString();
+    s.request.period = ui_.subscribePeriodLineEdit->text().toDouble();
+    s.request.queue_size = ui_.advertiseQueueSizeSpinBox->value();
+    service_clients_["remote_subscribe"].call(s);
   }
 }
 
@@ -603,13 +655,40 @@ void UDPBridgePlugin::selectedRemoteTopicChanged()
   if(updating_tables_)
     return;
 
+  auto remote = selectedRemote();
   auto remote_topic = selectedRemoteTopic();
+
   if(active_remote_topic_ != remote_topic)
   {
     ui_.subscribeLocalTopicLineEdit->clear();
     ui_.subscribePeriodLineEdit->setText("0.0");
     ui_.subscribeQueueSizeSpinBox->setValue(1);
+
+    bool subscibed = false;
+
+    for(auto t: remote_bridge_info_.topics)
+    {
+      if(t.topic == remote_topic)
+      {
+        for(auto r: t.remotes)
+          if(r.remote == remote_bridge_info_.remote_label)
+          {
+            ui_.subscribeLocalTopicLineEdit->setText(r.destination_topic.c_str());
+            ui_.subscribePeriodLineEdit->setText(QString::number(r.period));
+            subscibed = true;
+            break;
+          }
+        break;
+      }
+    }
     
+    if(subscibed)
+      ui_.subscribePushButton->setText("Update");
+    else
+      ui_.subscribePushButton->setText("Subscribe");
+    ui_.subscribePushButton->setEnabled(!remote.empty() && !remote_topic.empty());
+    
+    active_remote_topic_ = remote_topic;
   }
   
 }

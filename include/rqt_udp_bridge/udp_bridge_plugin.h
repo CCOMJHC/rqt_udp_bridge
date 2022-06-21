@@ -40,6 +40,7 @@ protected slots:
   void onNodeChanged(int index);
   void addRemote();
   void advertise();
+  void subscribe();
 
   void channelStatisticsCallback(const udp_bridge::ChannelStatisticsArray& msg);
   void remoteChannelStatisticsCallback(const udp_bridge::ChannelStatisticsArray& msg);
