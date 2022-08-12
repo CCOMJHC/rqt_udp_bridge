@@ -55,8 +55,10 @@ void UDPBridgePlugin::initPlugin(qt_gui_cpp::PluginContext& context)
 
   QStringList remotes_header;
   remotes_header.append("remote");
-  remotes_header.append("overhead");
-  remotes_header.append("total");
+  remotes_header.append("overhead sent");
+  remotes_header.append("total sent");
+  remotes_header.append("received");
+  ui_.remotesTableWidget->setColumnCount(4);
   ui_.remotesTableWidget->setHorizontalHeaderLabels(remotes_header);
 
   QStringList remote_topics_header;
@@ -432,6 +434,8 @@ void UDPBridgePlugin::updateTables()
   {
     auto* item = new QTableWidgetItem(QString(bridge_info_.remotes[i].name.c_str()));
     ui_.remotesTableWidget->setItem(i, 0, item);
+    item = new QTableWidgetItem(QString::number(bridge_info_.remotes[i].received_bytes_per_second)+" bytes/sec");
+    ui_.remotesTableWidget->setItem(i, 3, item);
   }
 
   ui_.remotesTableWidget->setSortingEnabled(true);
@@ -577,12 +581,23 @@ void UDPBridgePlugin::selectedRemoteChanged()
       if(remote_bridge_info_subsciber_.getTopic() != remote_info_topic)
       {
         remote_bridge_info_subsciber_.shutdown();
+        {
+          std::lock_guard<std::mutex> lock(data_update_mutex_);
+          remote_bridge_info_ = udp_bridge::BridgeInfo();
+          ui_.remoteTopicsTableWidget->clearContents();
+          ui_.remoteTopicsTableWidget->setRowCount(0);
+          ui_.subscribePushButton->setEnabled(false);
+        }
         remote_bridge_info_subsciber_ = getNodeHandle().subscribe(remote_info_topic, 1, &UDPBridgePlugin::remoteBridgeInfoCallback, this);
       }
       std::string remote_stats_topic = node_namespace_+"/remotes/"+remote.topic_label+"/channel_statistics";
       if(remote_channel_statistics_subscriber_.getTopic() != remote_stats_topic)
       {
         remote_channel_statistics_subscriber_.shutdown();
+        {
+          std::lock_guard<std::mutex> lock(data_update_mutex_);
+          remote_channel_statistics_array_ = udp_bridge::ChannelStatisticsArray();
+        }
         remote_channel_statistics_subscriber_ = getNodeHandle().subscribe(remote_stats_topic, 1, &UDPBridgePlugin::remoteChannelStatisticsCallback, this);
       }
 
