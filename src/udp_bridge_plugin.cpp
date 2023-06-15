@@ -522,6 +522,10 @@ void UDPBridgePlugin::addRemote()
       add_remote.request.name = addRemoteDialogUI.nameLineEdit->text().toStdString();
       add_remote.request.return_address = addRemoteDialogUI.returnAddressLineEdit->text().toStdString();
       add_remote.request.port = addRemoteDialogUI.portLineEdit->text().toInt();
+      bool ok;
+      uint16_t return_port = addRemoteDialogUI.returnPortLineEdit->text().toInt(&ok);
+      if(ok)
+        add_remote.request.return_port = return_port;
       service_clients_["add_remote"].call(add_remote);
     }
   }
@@ -576,6 +580,8 @@ void UDPBridgePlugin::selectedRemoteChanged()
       ui_.remoteHostLineEdit->setText(remote.host.c_str());
       ui_.remoteIPAddressLineEdit->setText(remote.ip_address.c_str());
       ui_.remotePortLineEdit->setText(QString::number(remote.port));
+      ui_.remoteReturnIPAddressLineEdit->setText(remote.return_host.c_str());
+      ui_.remoteReturnPortLineEdit->setText(QString::number(remote.return_port));
 
       std::string remote_info_topic = node_namespace_+"/remotes/"+remote.topic_label+"/bridge_info";
       if(remote_bridge_info_subsciber_.getTopic() != remote_info_topic)
