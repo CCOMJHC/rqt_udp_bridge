@@ -250,11 +250,11 @@ void UDPBridgePlugin::updateStatistics()
     std::lock_guard<std::mutex> lock(data_update_mutex_);
     for(auto cs: channel_statistics_array_.channels)
     {
-      if(totals.find(cs.remote) == totals.end())
-        totals[cs.remote] = std::make_pair<double,double>(0.0,0.0);
-      totals[cs.remote].second += cs.compressed_bytes_per_second;
+      if(totals.find(cs.destination_node) == totals.end())
+        totals[cs.destination_node] = std::make_pair<double,double>(0.0,0.0);
+      totals[cs.destination_node].second += cs.compressed_bytes_per_second;
       if(cs.source_topic.empty()) // overhead
-        totals[cs.remote].first += cs.compressed_bytes_per_second;
+        totals[cs.destination_node].first += cs.compressed_bytes_per_second;
     }
   }
 
@@ -298,7 +298,7 @@ void UDPBridgePlugin::updateStatistics()
 
     for(auto cs: channel_statistics_array_.channels)
     {
-      if(selected_remote.empty() || cs.remote == selected_remote)
+      if(selected_remote.empty() || cs.destination_node == selected_remote)
       {
         if(rates.find(cs.source_topic) == rates.end())
           rates[cs.source_topic] = 0.0;
@@ -332,7 +332,7 @@ void UDPBridgePlugin::updateStatistics()
 
     for(auto cs: remote_channel_statistics_array_.channels)
     {
-      if(remote_channel_statistics_array_.remote_label == cs.remote)
+      if(bridge_info_.name == cs.destination_node)
       {
         remote_rates[cs.source_topic] = cs.compressed_bytes_per_second;
       }
@@ -434,7 +434,10 @@ void UDPBridgePlugin::updateTables()
   {
     auto* item = new QTableWidgetItem(QString(bridge_info_.remotes[i].name.c_str()));
     ui_.remotesTableWidget->setItem(i, 0, item);
-    item = new QTableWidgetItem(QString::number(bridge_info_.remotes[i].received_bytes_per_second)+" bytes/sec");
+    double received_bytes_per_second = 0.0;
+    for(auto connection: bridge_info_.remotes[i].connections)
+      received_bytes_per_second += connection.received_bytes_per_second;
+    item = new QTableWidgetItem(QString::number(received_bytes_per_second)+" bytes/sec");
     ui_.remotesTableWidget->setItem(i, 3, item);
   }
 
@@ -577,13 +580,13 @@ void UDPBridgePlugin::selectedRemoteChanged()
   {
     if(remote.name == selected)
     {
-      ui_.remoteHostLineEdit->setText(remote.host.c_str());
-      ui_.remoteIPAddressLineEdit->setText(remote.ip_address.c_str());
-      ui_.remotePortLineEdit->setText(QString::number(remote.port));
-      ui_.remoteReturnIPAddressLineEdit->setText(remote.return_host.c_str());
-      ui_.remoteReturnPortLineEdit->setText(QString::number(remote.return_port));
+      // ui_.remoteHostLineEdit->setText(remote.host.c_str());
+      // ui_.remoteIPAddressLineEdit->setText(remote.ip_address.c_str());
+      // ui_.remotePortLineEdit->setText(QString::number(remote.port));
+      // ui_.remoteReturnIPAddressLineEdit->setText(remote.return_host.c_str());
+      // ui_.remoteReturnPortLineEdit->setText(QString::number(remote.return_port));
 
-      std::string remote_info_topic = node_namespace_+"/remotes/"+remote.topic_label+"/bridge_info";
+      std::string remote_info_topic = node_namespace_+"/remotes/"+remote.topic_name+"/bridge_info";
       if(remote_bridge_info_subsciber_.getTopic() != remote_info_topic)
       {
         remote_bridge_info_subsciber_.shutdown();
@@ -596,7 +599,7 @@ void UDPBridgePlugin::selectedRemoteChanged()
         }
         remote_bridge_info_subsciber_ = getNodeHandle().subscribe(remote_info_topic, 1, &UDPBridgePlugin::remoteBridgeInfoCallback, this);
       }
-      std::string remote_stats_topic = node_namespace_+"/remotes/"+remote.topic_label+"/channel_statistics";
+      std::string remote_stats_topic = node_namespace_+"/remotes/"+remote.topic_name+"/channel_statistics";
       if(remote_channel_statistics_subscriber_.getTopic() != remote_stats_topic)
       {
         remote_channel_statistics_subscriber_.shutdown();
@@ -692,7 +695,7 @@ void UDPBridgePlugin::selectedRemoteTopicChanged()
       if(t.topic == remote_topic)
       {
         for(auto r: t.remotes)
-          if(r.remote == remote_bridge_info_.remote_label)
+          if(r.remote == remote_bridge_info_.name)
           {
             ui_.subscribeLocalTopicLineEdit->setText(r.destination_topic.c_str());
             ui_.subscribePeriodLineEdit->setText(QString::number(r.period));
