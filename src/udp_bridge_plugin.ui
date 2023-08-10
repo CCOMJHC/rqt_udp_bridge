@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>785</width>
-    <height>555</height>
+    <width>983</width>
+    <height>829</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -47,359 +47,77 @@
         </property>
        </widget>
       </item>
+      <item>
+       <widget class="QPushButton" name="advertisePushButton">
+        <property name="text">
+         <string>Advertise</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="addRemotePushButton">
+        <property name="text">
+         <string>Add</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="subscribePushButton">
+        <property name="text">
+         <string>Subscribe</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
    <item>
-    <widget class="QSplitter" name="mainSplitter">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-       <horstretch>0</horstretch>
-       <verstretch>1</verstretch>
-      </sizepolicy>
-     </property>
+    <widget class="QSplitter" name="splitter">
      <property name="orientation">
-      <enum>Qt::Horizontal</enum>
+      <enum>Qt::Vertical</enum>
      </property>
-     <widget class="QWidget" name="layoutWidget">
-      <layout class="QVBoxLayout" name="remotesVerticalLayout">
+     <widget class="QGroupBox" name="localTopicsGroupBox">
+      <property name="title">
+       <string>Local Topics</string>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_3">
        <item>
-        <layout class="QHBoxLayout" name="remotesHeaderHorizontalLayout">
-         <item>
-          <widget class="QLabel" name="remotesLabel">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-             <horstretch>1</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="text">
-            <string>Remotes</string>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignCenter</set>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="addRemotePushButton">
-           <property name="text">
-            <string>Add</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <widget class="QTableWidget" name="remotesTableWidget">
+        <widget class="QTreeView" name="localTopicsTreeView">
          <property name="selectionMode">
           <enum>QAbstractItemView::SingleSelection</enum>
          </property>
-         <property name="selectionBehavior">
-          <enum>QAbstractItemView::SelectRows</enum>
-         </property>
-         <property name="columnCount">
-          <number>3</number>
-         </property>
-         <attribute name="verticalHeaderVisible">
-          <bool>false</bool>
-         </attribute>
-         <column/>
-         <column/>
-         <column/>
         </widget>
-       </item>
-       <item>
-        <layout class="QFormLayout" name="remoteDetailsFormLayout">
-         <item row="0" column="0">
-          <widget class="QLabel" name="remoteHostLabel">
-           <property name="text">
-            <string>Host</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="1">
-          <widget class="QLineEdit" name="remoteHostLineEdit">
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="remoteIPAddressLabel">
-           <property name="text">
-            <string>IP Address</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QLineEdit" name="remoteIPAddressLineEdit">
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QLabel" name="remotePortLabel">
-           <property name="text">
-            <string>Port</string>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="1">
-          <widget class="QLineEdit" name="remotePortLineEdit">
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="1">
-          <widget class="QLineEdit" name="remoteReturnIPAddressLineEdit">
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="0">
-          <widget class="QLabel" name="remoteReturnIPAddressLabel">
-           <property name="text">
-            <string>Return Address</string>
-           </property>
-          </widget>
-         </item>
-         <item row="6" column="0">
-          <widget class="QLabel" name="remoteReturnPortLabel">
-           <property name="text">
-            <string>Return Port</string>
-           </property>
-          </widget>
-         </item>
-         <item row="6" column="1">
-          <widget class="QLineEdit" name="remoteReturnPortLineEdit">
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-        </layout>
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="layoutWidget">
-      <layout class="QVBoxLayout" name="localTopicsVerticalLayout">
+     <widget class="QGroupBox" name="remotesGroupBox">
+      <property name="title">
+       <string>Remotes</string>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_2">
        <item>
-        <widget class="QLabel" name="localTopicsLabel">
-         <property name="text">
-          <string>Local topics</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QTableWidget" name="localTopicsTableWidget">
-         <property name="editTriggers">
-          <set>QAbstractItemView::NoEditTriggers</set>
-         </property>
+        <widget class="QTreeView" name="remotesTreeView">
          <property name="selectionMode">
           <enum>QAbstractItemView::SingleSelection</enum>
          </property>
-         <property name="selectionBehavior">
-          <enum>QAbstractItemView::SelectRows</enum>
-         </property>
-         <property name="rowCount">
-          <number>0</number>
-         </property>
-         <property name="columnCount">
-          <number>2</number>
-         </property>
-         <attribute name="verticalHeaderVisible">
-          <bool>false</bool>
-         </attribute>
-         <column/>
-         <column/>
         </widget>
-       </item>
-       <item>
-        <layout class="QFormLayout" name="advertiseFormLayout">
-         <item row="0" column="0">
-          <widget class="QLabel" name="advertiseRemoteTopicLabel">
-           <property name="text">
-            <string>Remote topic</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="1">
-          <widget class="QLineEdit" name="advertiseRemoteTopicLineEdit">
-           <property name="toolTip">
-            <string>Defaults to local topic name</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="advertiseQueueSizeLabel">
-           <property name="text">
-            <string>Queue size</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QSpinBox" name="advertiseQueueSizeSpinBox">
-           <property name="minimum">
-            <number>1</number>
-           </property>
-           <property name="maximum">
-            <number>1000</number>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QLabel" name="advertisePeriodLabel">
-           <property name="text">
-            <string>Period</string>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="1">
-          <widget class="QLineEdit" name="advertisePeriodLineEdit">
-           <property name="toolTip">
-            <string>Period in seconds between sent messages if possitive, send all message if 0, or don't send any messages if negative</string>
-           </property>
-           <property name="text">
-            <string>0.0</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="advertisePushButtonHorizontalLayout">
-         <item>
-          <spacer name="advertisePushButtonHorizontalSpacer">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
-          <widget class="QPushButton" name="advertisePushButton">
-           <property name="text">
-            <string>Advertise</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="layoutWidget">
-      <layout class="QVBoxLayout" name="remoteTopicsVerticalLayout">
+     <widget class="QGroupBox" name="remoteTopicsGroupBox">
+      <property name="title">
+       <string>Remote Topics</string>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_4">
        <item>
-        <widget class="QLabel" name="remoteTopicsLabel">
-         <property name="text">
-          <string>Remote topics</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QTableWidget" name="remoteTopicsTableWidget">
+        <widget class="QTreeView" name="remoteTopicsTreeView">
          <property name="selectionMode">
           <enum>QAbstractItemView::SingleSelection</enum>
          </property>
          <property name="selectionBehavior">
           <enum>QAbstractItemView::SelectRows</enum>
          </property>
-         <property name="columnCount">
-          <number>2</number>
-         </property>
-         <attribute name="verticalHeaderVisible">
-          <bool>false</bool>
-         </attribute>
-         <column/>
-         <column/>
         </widget>
-       </item>
-       <item>
-        <layout class="QFormLayout" name="subscribeFormLayout">
-         <item row="0" column="0">
-          <widget class="QLabel" name="subscribeLocalTopicLabel">
-           <property name="text">
-            <string>Local topic</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="1">
-          <widget class="QLineEdit" name="subscribeLocalTopicLineEdit"/>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="subscribeQueueSizeLabel">
-           <property name="text">
-            <string>Queue size</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QSpinBox" name="subscribeQueueSizeSpinBox">
-           <property name="minimum">
-            <number>1</number>
-           </property>
-           <property name="maximum">
-            <number>1000</number>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QLabel" name="subscribePeriodLabel">
-           <property name="text">
-            <string>Period</string>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="1">
-          <widget class="QLineEdit" name="subscribePeriodLineEdit">
-           <property name="toolTip">
-            <string>Period in seconds between sent messages if possitive, send all message if 0, or don't send any messages if negative</string>
-           </property>
-           <property name="text">
-            <string>0.0</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="subscribePushButtonHorizontalLayout">
-         <item>
-          <spacer name="subscribePushButtonHorizontalSpacer">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
-          <widget class="QPushButton" name="subscribePushButton">
-           <property name="text">
-            <string>Subscribe</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
        </item>
       </layout>
      </widget>

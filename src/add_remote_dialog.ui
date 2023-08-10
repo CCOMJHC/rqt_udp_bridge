@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>306</width>
-    <height>169</height>
+    <width>377</width>
+    <height>262</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -26,57 +26,81 @@
      <item row="0" column="1">
       <widget class="QLineEdit" name="nameLineEdit"/>
      </item>
-     <item row="1" column="0">
+     <item row="2" column="0">
       <widget class="QLabel" name="addressLabel">
        <property name="text">
         <string>Address:</string>
        </property>
       </widget>
      </item>
-     <item row="1" column="1">
+     <item row="2" column="1">
       <widget class="QLineEdit" name="addressLineEdit">
        <property name="toolTip">
         <string>IP address or host name of the remote.</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="0">
+     <item row="4" column="0">
       <widget class="QLabel" name="returnAddressLabel">
        <property name="text">
         <string>Return Address:</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="1">
+     <item row="4" column="1">
       <widget class="QLineEdit" name="returnAddressLineEdit">
        <property name="toolTip">
         <string>Optional, useful for a remote behind a NAT where the return address can't be automatically determined.</string>
        </property>
       </widget>
      </item>
-     <item row="4" column="0">
-      <widget class="QLabel" name="portLabel">
-       <property name="text">
-        <string>Port:</string>
-       </property>
-      </widget>
-     </item>
-     <item row="4" column="1">
-      <widget class="QLineEdit" name="portLineEdit">
-       <property name="text">
-        <string>4200</string>
-       </property>
-      </widget>
-     </item>
-     <item row="3" column="0">
+     <item row="5" column="0">
       <widget class="QLabel" name="returnPortLabel">
        <property name="text">
         <string>Return Port:</string>
        </property>
       </widget>
      </item>
-     <item row="3" column="1">
+     <item row="5" column="1">
       <widget class="QLineEdit" name="returnPortLineEdit"/>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="connectionLabel">
+       <property name="text">
+        <string>Connection:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLineEdit" name="connectionLineEdit"/>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLabel" name="portLabel">
+       <property name="text">
+        <string>Port:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="1">
+      <widget class="QLineEdit" name="portLineEdit">
+       <property name="text">
+        <string>4200</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="0">
+      <widget class="QLabel" name="rateLimitLabel">
+       <property name="text">
+        <string>Rate Limit:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="1">
+      <widget class="QLineEdit" name="rateLimitLineEdit">
+       <property name="toolTip">
+        <string>Maximum connection data rate in bytes per second.</string>
+       </property>
+      </widget>
      </item>
     </layout>
    </item>
@@ -92,6 +116,15 @@
    </item>
   </layout>
  </widget>
+ <tabstops>
+  <tabstop>nameLineEdit</tabstop>
+  <tabstop>connectionLineEdit</tabstop>
+  <tabstop>addressLineEdit</tabstop>
+  <tabstop>portLineEdit</tabstop>
+  <tabstop>returnAddressLineEdit</tabstop>
+  <tabstop>returnPortLineEdit</tabstop>
+  <tabstop>rateLimitLineEdit</tabstop>
+ </tabstops>
  <resources/>
  <connections>
   <connection>

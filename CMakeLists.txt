@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(rqt_udp_bridge)
 
-add_compile_options(-std=c++11)
+add_compile_options(-std=c++14)
 
 find_package(catkin REQUIRED COMPONENTS
     roscpp
@@ -25,15 +25,18 @@ roslint_cpp()
 
 set(rqt_udp_bridge_SRCS
   src/udp_bridge_plugin.cpp
+  src/bridge_node.cpp
 )
 
 set(rqt_udp_bridge_HDRS
   include/rqt_udp_bridge/udp_bridge_plugin.h
+  include/rqt_udp_bridge/bridge_node.h
 )
 
 set(rqt_udp_bridge_UIS
   src/udp_bridge_plugin.ui
   src/add_remote_dialog.ui
+  src/subscribe_dialog.ui
 )
 
 set(rqt_udp_bridge_INCLUDE_DIRECTORIES

@@ -4,8 +4,9 @@
 #include <rqt_gui_cpp/plugin.h>
 #include <ui_udp_bridge_plugin.h>
 #include <ros/ros.h>
-#include <udp_bridge/ChannelStatisticsArray.h>
+#include <udp_bridge/TopicStatisticsArray.h>
 #include <udp_bridge/BridgeInfo.h>
+#include <rqt_udp_bridge/bridge_node.h>
 
 class QLabel;
 
@@ -23,61 +24,41 @@ public:
   void saveSettings(qt_gui_cpp::Settings& plugin_settings, qt_gui_cpp::Settings& instance_settings) const override;
   void restoreSettings(const qt_gui_cpp::Settings& plugin_settings, const qt_gui_cpp::Settings& instance_settings) override;
 
-signals:
-  void bridgeInfoUpdated();
-  void channelStatisticsUpdated();
-
-protected:
-  std::string selectedRemote();
-  std::string selectedLocalTopic();
-  std::string selectedRemoteTopic();
-
-protected slots:
+private slots:
   void updateNodeList();
-    
   void selectNode(const QString& node);
-
   void onNodeChanged(int index);
+
   void addRemote();
-  void advertise();
-  void subscribe();
+  void subscribe(bool remote_advertise=false);
 
-  void channelStatisticsCallback(const udp_bridge::ChannelStatisticsArray& msg);
-  void remoteChannelStatisticsCallback(const udp_bridge::ChannelStatisticsArray& msg);
-  void bridgeInfoCallback(const udp_bridge::BridgeInfo& msg);
-  void remoteBridgeInfoCallback(const udp_bridge::BridgeInfo& msg);
+  void currentRemoteChanged(const QModelIndex& index, const QModelIndex& previous_index);
+  void currentLocalTopicChanged(const QModelIndex& index, const QModelIndex& previous_index);
+  void currentRemoteTopicChanged(const QModelIndex& index, const QModelIndex& previous_index);
 
-  void updateTables();
-
-  void selectedRemoteChanged();
-  void selectedLocalTopicChanged();
-  void selectedRemoteTopicChanged();
-
-  void updateStatistics();
 
 private:
+  using RemoteConnectionID = std::pair<std::string, std::string>;
+  using TopicRemoteConnection = std::pair<std::string, RemoteConnectionID>;
+
+  RemoteConnectionID getRemoteConnection(const QModelIndex& index);
+  TopicRemoteConnection getTopicRemoteConnection(const QModelIndex& index);
+
   Ui::UDPBridgeWidget ui_;
   QWidget* widget_ = nullptr;
 
   std::string node_namespace_;
 
-  ros::Subscriber channel_statistics_subscriber_;
-  ros::Subscriber bridge_info_subscriber_;
-  ros::Subscriber remote_bridge_info_subsciber_;
-  ros::Subscriber remote_channel_statistics_subscriber_;
-
   QString arg_node_;
 
-  std::map<std::string, ros::ServiceClient> service_clients_;
-
-  udp_bridge::ChannelStatisticsArray channel_statistics_array_, remote_channel_statistics_array_;
-  udp_bridge::BridgeInfo bridge_info_, remote_bridge_info_;
-  std::mutex data_update_mutex_;
-
   std::string active_remote_;
+  std::string active_connection_;
   std::string active_local_topic_;
   std::string active_remote_topic_;
-  bool updating_tables_ = false;
+
+  BridgeNode* bridge_node_ = nullptr;
+
+  QMetaObject::Connection remote_topic_changed_connection_;
 };
 
 } // namespace rqt_udp_bridge
