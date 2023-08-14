@@ -24,6 +24,8 @@ void UDPBridgePlugin::initPlugin(qt_gui_cpp::PluginContext& context)
 {
   widget_ = new QWidget();
   ui_.setupUi(widget_);
+  ui_.splitter->setHandleWidth(8);
+  ui_.splitter->setStyleSheet("QSplitter::handle{background: #3030FF;}");
 
   if(!bridge_node_)
     bridge_node_ = new BridgeNode(this);
@@ -149,6 +151,7 @@ void UDPBridgePlugin::onNodeChanged(int index)
   active_local_topic_.clear();
   active_remote_topic_.clear();
   ui_.remoteTopicsTreeView->setModel(nullptr);
+  ui_.remoteRemotesTreeView->setModel(nullptr);
 
   QString node = ui_.nodesComboBox->itemData(index).toString();
   node_namespace_ = node.toStdString();
@@ -293,6 +296,7 @@ void UDPBridgePlugin::currentRemoteChanged(const QModelIndex& index, const QMode
   active_connection_ = current.second;
   ui_.remoteTopicsTreeView->setModel(bridge_node_->remoteTopicsModel(active_remote_));
   disconnect(remote_topic_changed_connection_);
+  ui_.remoteRemotesTreeView->setModel(bridge_node_->remoteRemotesModel(active_remote_));
   remote_topic_changed_connection_ = connect(ui_.remoteTopicsTreeView->selectionModel(), &QItemSelectionModel::currentChanged, this, &UDPBridgePlugin::currentRemoteTopicChanged);
  
 }

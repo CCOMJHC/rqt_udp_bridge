@@ -98,6 +98,15 @@ QStandardItemModel* BridgeNode::remoteTopicsModel(const std::string &remote)
   return remote_node->second->topicsModel();
 }
 
+QStandardItemModel* BridgeNode::remoteRemotesModel(const std::string &remote)
+{
+  auto remote_node = remotes_.find(remote);
+  if(remote_node == remotes_.end())
+    return nullptr;
+  return remote_node->second->remotesModel();
+}
+
+
 QString humanReadableDataRate(float rate)
 {
   std::vector<QString> units = {"Bps","KBps","MBps"};

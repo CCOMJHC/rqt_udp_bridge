@@ -28,6 +28,7 @@ public:
   QStandardItemModel* topicsModel();
   QStandardItemModel* remotesModel();
   QStandardItemModel* remoteTopicsModel(const std::string &remote);
+  QStandardItemModel* remoteRemotesModel(const std::string &remote);
 
   bool addRemote(udp_bridge::AddRemote & add_remote);
   bool remoteAdvertise(udp_bridge::Subscribe & subscribe);
