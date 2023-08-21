@@ -33,9 +33,14 @@ private slots:
   void subscribe(bool remote_advertise=false);
 
   void currentRemoteChanged(const QModelIndex& index, const QModelIndex& previous_index);
+  void currentRemoteRemoteChanged(const QModelIndex& index, const QModelIndex& previous_index);
+
   void currentLocalTopicChanged(const QModelIndex& index, const QModelIndex& previous_index);
   void currentRemoteTopicChanged(const QModelIndex& index, const QModelIndex& previous_index);
 
+  void updateCurrentRemoteDetails(QString remote, QString connection, QString details);
+
+  void updateCurrentRemoteRemoteDetails(QString remote, QString connection, QString details);
 
 private:
   using RemoteConnectionID = std::pair<std::string, std::string>;
@@ -55,10 +60,15 @@ private:
   std::string active_connection_;
   std::string active_local_topic_;
   std::string active_remote_topic_;
+  std::string active_remote_remote_;
+  std::string active_remote_connection_;
 
   BridgeNode* bridge_node_ = nullptr;
 
   QMetaObject::Connection remote_topic_changed_connection_;
+  QMetaObject::Connection remote_remote_changed_connection_;
+  QMetaObject::Connection update_remote_remote_details_connection_;
+
 };
 
 } // namespace rqt_udp_bridge

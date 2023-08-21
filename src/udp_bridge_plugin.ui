@@ -115,7 +115,7 @@
       <property name="title">
        <string>Remotes</string>
       </property>
-      <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
         <widget class="QTreeView" name="remotesTreeView">
          <property name="sizePolicy">
@@ -126,6 +126,16 @@
          </property>
          <property name="selectionMode">
           <enum>QAbstractItemView::SingleSelection</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="selectedRemotedetailsLabel">
+         <property name="text">
+          <string/>
+         </property>
+         <property name="textInteractionFlags">
+          <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
          </property>
         </widget>
        </item>
@@ -170,7 +180,7 @@
       <property name="title">
        <string>Remote Remotes</string>
       </property>
-      <layout class="QHBoxLayout" name="horizontalLayout_5">
+      <layout class="QVBoxLayout" name="verticalLayout_3">
        <item>
         <widget class="QTreeView" name="remoteRemotesTreeView">
          <property name="sizePolicy">
@@ -178,6 +188,16 @@
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="selectedRemoteRemoteDetailsLabel">
+         <property name="text">
+          <string/>
+         </property>
+         <property name="textInteractionFlags">
+          <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
          </property>
         </widget>
        </item>

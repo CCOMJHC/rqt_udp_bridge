@@ -46,6 +46,8 @@ void UDPBridgePlugin::initPlugin(qt_gui_cpp::PluginContext& context)
   connect(ui_.remotesTreeView->selectionModel(), &QItemSelectionModel::currentChanged, this, &UDPBridgePlugin::currentRemoteChanged);
   connect(ui_.localTopicsTreeView->selectionModel(), &QItemSelectionModel::currentChanged, this, &UDPBridgePlugin::currentLocalTopicChanged);
 
+  connect(bridge_node_, &BridgeNode::remoteDetailsUpdated, this, & UDPBridgePlugin::updateCurrentRemoteDetails);
+  
   connect(ui_.addRemotePushButton, &QPushButton::pressed, this, &UDPBridgePlugin::addRemote);
   connect(ui_.advertisePushButton, &QPushButton::pressed, this, [this](){this->subscribe(true);});
   connect(ui_.subscribePushButton, &QPushButton::pressed, this, [this](){this->subscribe();});
@@ -61,6 +63,7 @@ void UDPBridgePlugin::initPlugin(qt_gui_cpp::PluginContext& context)
 void UDPBridgePlugin::shutdownPlugin()
 {
   delete bridge_node_;
+  bridge_node_ = nullptr;
 }
 
 void UDPBridgePlugin::saveSettings(qt_gui_cpp::Settings& plugin_settings, qt_gui_cpp::Settings& instance_settings) const
@@ -178,6 +181,9 @@ void UDPBridgePlugin::addRemote()
     uint32_t max_rate = addRemoteDialogUI.rateLimitLineEdit->text().toUInt(&ok);
     if(ok)
       add_remote.request.maximum_bytes_per_second = max_rate;
+    max_rate = addRemoteDialogUI.returnRateLimitLineEdit->text().toUInt(&ok);
+    if(ok)
+      add_remote.request.return_maximum_bytes_per_second = max_rate;
     
     if(!bridge_node_->addRemote(add_remote))
     {
@@ -295,11 +301,29 @@ void UDPBridgePlugin::currentRemoteChanged(const QModelIndex& index, const QMode
   active_remote_ = current.first;
   active_connection_ = current.second;
   ui_.remoteTopicsTreeView->setModel(bridge_node_->remoteTopicsModel(active_remote_));
+
   disconnect(remote_topic_changed_connection_);
   ui_.remoteRemotesTreeView->setModel(bridge_node_->remoteRemotesModel(active_remote_));
   remote_topic_changed_connection_ = connect(ui_.remoteTopicsTreeView->selectionModel(), &QItemSelectionModel::currentChanged, this, &UDPBridgePlugin::currentRemoteTopicChanged);
- 
+
+  disconnect(remote_remote_changed_connection_);
+  remote_remote_changed_connection_ = connect(ui_.remoteRemotesTreeView->selectionModel(), &QItemSelectionModel::currentChanged, this, &UDPBridgePlugin::currentRemoteRemoteChanged);
+
+  disconnect(update_remote_remote_details_connection_);
+  update_remote_remote_details_connection_ = connect(bridge_node_->remoteBridgeNode(active_remote_), &BridgeNode::remoteDetailsUpdated, this, & UDPBridgePlugin::updateCurrentRemoteRemoteDetails);
+
+  ui_.remoteTopicsGroupBox->setTitle(QString("Remote Topics (")+active_remote_.c_str()+")");
+  ui_.remoteRemotesGroupBox->setTitle(QString("Remote Remotes (")+active_remote_.c_str()+")");
 }
+
+void UDPBridgePlugin::currentRemoteRemoteChanged(const QModelIndex& index, const QModelIndex& previous_index)
+{
+  auto previous = getRemoteConnection(previous_index);
+  auto current = getRemoteConnection(index);
+  active_remote_remote_ = current.first;
+  active_remote_connection_ = current.second;
+}
+
 
 void UDPBridgePlugin::currentLocalTopicChanged(const QModelIndex& index, const QModelIndex& previous_index)
 {
@@ -311,6 +335,19 @@ void UDPBridgePlugin::currentRemoteTopicChanged(const QModelIndex& index, const 
 {
   auto current = getTopicRemoteConnection(index);
   active_remote_topic_ = current.first;
+}
+
+
+void UDPBridgePlugin::updateCurrentRemoteDetails(QString remote, QString connection, QString details)
+{
+  if(remote.toStdString() == active_remote_ && connection.toStdString() == active_connection_)
+    ui_.selectedRemotedetailsLabel->setText(details);
+}
+
+void UDPBridgePlugin::updateCurrentRemoteRemoteDetails(QString remote, QString connection, QString details)
+{
+  if(remote.toStdString() == active_remote_remote_ && connection.toStdString() == active_remote_connection_)
+    ui_.selectedRemoteRemoteDetailsLabel->setText(QString(active_remote_.c_str())+"'s "+ details);
 }
 
 } // namespace rqt_udp_bridge

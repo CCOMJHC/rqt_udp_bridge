@@ -44,7 +44,6 @@ void BridgeNode::setTopicsPrefix(ros::NodeHandle& node_handle, std::string node_
   labels.push_back("topic/remote/connection");
   labels.push_back("messages");
   labels.push_back("msg bytes");
-  labels.push_back("packet bytes");
   labels.push_back("sent bytes");
   labels.push_back("failed bytes");
   labels.push_back("dropped bytes");
@@ -53,20 +52,17 @@ void BridgeNode::setTopicsPrefix(ros::NodeHandle& node_handle, std::string node_
 
   QStringList remotes_labels;
   remotes_labels.push_back("remote/connection");
-  remotes_labels.push_back("host");
-  remotes_labels.push_back("port");
-  remotes_labels.push_back("ip address");
-  remotes_labels.push_back("return host");
-  remotes_labels.push_back("return port");
-  remotes_labels.push_back("source ip");
-  remotes_labels.push_back("source port");
-  remotes_labels.push_back("maximum rate");
   remotes_labels.push_back("received");
   remotes_labels.push_back("duplicate");
-  remotes_labels.push_back("ovrhd msg sent");
+  remotes_labels.push_back("msg sent ok");
+  remotes_labels.push_back("msg sent fail");
+  remotes_labels.push_back("msg sent drop");
   remotes_labels.push_back("ovrhd sent ok");
   remotes_labels.push_back("ovrhd sent fail");
   remotes_labels.push_back("ovrhd sent drop");
+  remotes_labels.push_back("resend sent ok");
+  remotes_labels.push_back("resend sent fail");
+  remotes_labels.push_back("resend sent drop");
   remotes_model_.setHorizontalHeaderLabels(remotes_labels);
 
   topic_statistics_subscriber_ = node_handle.subscribe(node_namespace+"/topic_statistics", 1, &BridgeNode::topicStatisticsCallback, this);
@@ -106,6 +102,13 @@ QStandardItemModel* BridgeNode::remoteRemotesModel(const std::string &remote)
   return remote_node->second->remotesModel();
 }
 
+BridgeNode* BridgeNode::remoteBridgeNode(const std::string &remote)
+{
+  auto remote_node = remotes_.find(remote);
+  if(remote_node == remotes_.end())
+    return nullptr;
+  return remote_node->second;
+}
 
 QString humanReadableDataRate(float rate)
 {
@@ -275,17 +278,22 @@ void BridgeNode::bridgeInfoUpdated()
         connection_item = new QStandardItem(connection.connection_id.c_str());
         item->appendRow(connection_item);
       }
+      std::stringstream tooltip;
+      tooltip << "remote: " << remote.name << " connection: " << connection.connection_id << " host: " << connection.host << " port: " << connection.port << " ip address: " << connection.ip_address << " return host: " << connection.return_host << " return port: " << connection.return_port << " source ip: " << connection.source_ip_address << " source port: " << connection.source_port << " max rate: " << connection.maximum_bytes_per_second << " bytes/sec";
+      connection_item->setData(tooltip.str().c_str(), Qt::ToolTipRole);
+      emit remoteDetailsUpdated(remote.name.c_str(), connection.connection_id.c_str(), tooltip.str().c_str());
       std::vector<QString> values;
-      values.push_back(connection.host.c_str());
-      values.push_back(QString::number(connection.port));
-      values.push_back(connection.ip_address.c_str());
-      values.push_back(connection.return_host.c_str());
-      values.push_back(QString::number(connection.return_port));
-      values.push_back(connection.source_ip_address.c_str());
-      values.push_back(QString::number(connection.source_port));
-      values.push_back(humanReadableDataRate(connection.maximum_bytes_per_second));
       values.push_back(humanReadableDataRate(connection.received_bytes_per_second));
       values.push_back(humanReadableDataRate(connection.duplicate_bytes_per_second));
+      values.push_back(humanReadableDataRate(connection.message.success_bytes_per_second));
+      values.push_back(humanReadableDataRate(connection.message.failed_bytes_per_second));
+      values.push_back(humanReadableDataRate(connection.message.dropped_bytes_per_second));
+      values.push_back(humanReadableDataRate(connection.overhead.success_bytes_per_second));
+      values.push_back(humanReadableDataRate(connection.overhead.failed_bytes_per_second));
+      values.push_back(humanReadableDataRate(connection.overhead.dropped_bytes_per_second));
+      values.push_back(humanReadableDataRate(connection.resend.success_bytes_per_second));
+      values.push_back(humanReadableDataRate(connection.resend.failed_bytes_per_second));
+      values.push_back(humanReadableDataRate(connection.resend.dropped_bytes_per_second));
       setChildData(item, connection_item->row(), values);
     }
 
@@ -315,92 +323,51 @@ void BridgeNode::topicStatisticsUpdated()
   for(const auto& topic_statistics: topic_statistics_array_.topics)
     if(!name_.empty() && topic_statistics.source_node == name_)
     {
-      if(topic_statistics.source_topic.empty())
+      QStandardItem* topic_item = nullptr;
+      auto items = topics_model_.findItems(topic_statistics.source_topic.c_str());
+      for(auto i: items)
+        if(i->parent() == nullptr) // make sure it's a top level item
+        {
+          topic_item = i;
+          break;
+        }
+      if(topic_item)
       {
         if(topic_statistics.destination_node.empty())
         {
+          std::vector<QString> values;
+          values.push_back(QString::number(topic_statistics.messages_per_second)+"/s");
+          values.push_back(humanReadableDataRate(topic_statistics.message_bytes_per_second));
+          setData(topics_model_, topic_item->row(), values);
         }
         else
         {
-          auto items = remotes_model_.findItems(topic_statistics.destination_node.c_str());
-          QStandardItem* item = nullptr;
-          for(auto i: items)
-            if(i->parent() == nullptr) // make sure it's a top level item
+          QStandardItem* remote_item = nullptr;
+          for(auto i = 0; i < topic_item->rowCount(); i++)
+            if(topic_item->child(i)->data(Qt::DisplayRole).toString().toStdString() == topic_statistics.destination_node)
             {
-              item = i;
+              remote_item = topic_item->child(i);
               break;
             }
-          if(item)
+          if(remote_item)
           {
             QStandardItem* connection_item = nullptr;
-            for(auto i = 0; i < item->rowCount(); i++)
-              if(item->child(i)->data(Qt::DisplayRole).toString().toStdString() == topic_statistics.connection_id)
+            for(auto i = 0; i < remote_item->rowCount(); i++)
+              if(remote_item->child(i)->data(Qt::DisplayRole).toString().toStdString() == topic_statistics.connection_id)
               {
-                connection_item = item->child(i);
+                connection_item = remote_item->child(i);
                 break;
               }
             if(connection_item)
             {
-                std::vector<QString> values;
-                values.push_back(humanReadableDataRate(topic_statistics.message_bytes_per_second));
-                values.push_back(humanReadableDataRate(topic_statistics.ok_sent_bytes_per_second));
-                values.push_back(humanReadableDataRate(topic_statistics.failed_sent_bytes_per_second));
-                values.push_back(humanReadableDataRate(topic_statistics.dropped_bytes_per_second));
-                setChildData(item, connection_item->row(), values, 11);
-            }
-
-          }
-        }
-      }
-      else
-      {
-        QStandardItem* topic_item = nullptr;
-        auto items = topics_model_.findItems(topic_statistics.source_topic.c_str());
-        for(auto i: items)
-          if(i->parent() == nullptr) // make sure it's a top level item
-          {
-            topic_item = i;
-            break;
-          }
-        if(topic_item)
-        {
-          if(topic_statistics.destination_node.empty())
-          {
-            std::vector<QString> values;
-            values.push_back(QString::number(topic_statistics.messages_per_second)+"/s");
-            values.push_back(humanReadableDataRate(topic_statistics.message_bytes_per_second));
-            setData(topics_model_, topic_item->row(), values);
-          }
-          else
-          {
-            QStandardItem* remote_item = nullptr;
-            for(auto i = 0; i < topic_item->rowCount(); i++)
-              if(topic_item->child(i)->data(Qt::DisplayRole).toString().toStdString() == topic_statistics.destination_node)
-              {
-                remote_item = topic_item->child(i);
-                break;
-              }
-            if(remote_item)
-            {
-              QStandardItem* connection_item = nullptr;
-              for(auto i = 0; i < remote_item->rowCount(); i++)
-                if(remote_item->child(i)->data(Qt::DisplayRole).toString().toStdString() == topic_statistics.connection_id)
-                {
-                  connection_item = remote_item->child(i);
-                  break;
-                }
-              if(connection_item)
-              {
-                std::vector<QString> values;
-                values.push_back(QString::number(topic_statistics.messages_per_second)+"/s");
-                values.push_back(humanReadableDataRate(topic_statistics.message_bytes_per_second));
-                values.push_back(humanReadableDataRate(topic_statistics.packet_bytes_per_second));
-                values.push_back(humanReadableDataRate(topic_statistics.ok_sent_bytes_per_second));
-                values.push_back(humanReadableDataRate(topic_statistics.failed_sent_bytes_per_second));
-                values.push_back(humanReadableDataRate(topic_statistics.dropped_bytes_per_second));
-                values.push_back(QString::number(topic_statistics.average_fragment_count));
-                setChildData(remote_item, connection_item->row(), values);
-              }
+              std::vector<QString> values;
+              values.push_back(QString::number(topic_statistics.messages_per_second)+"/s");
+              values.push_back(humanReadableDataRate(topic_statistics.message_bytes_per_second));
+              values.push_back(humanReadableDataRate(topic_statistics.send.success_bytes_per_second));
+              values.push_back(humanReadableDataRate(topic_statistics.send.failed_bytes_per_second));
+              values.push_back(humanReadableDataRate(topic_statistics.send.dropped_bytes_per_second));
+              values.push_back(QString::number(topic_statistics.average_fragment_count));
+              setChildData(remote_item, connection_item->row(), values);
             }
           }
         }
